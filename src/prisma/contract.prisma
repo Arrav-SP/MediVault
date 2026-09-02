@@ -1,0 +1,423 @@
+// use prisma-next
+
+types {
+  Uuid = Uuid
+}
+
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum RecordType {
+  @@type("pg/text@1")
+
+  prescription = "prescription"
+  lab_report = "lab_report"
+  scan = "scan"
+  discharge_summary = "discharge_summary"
+  invoice = "invoice"
+  medical_history = "medical_history"
+  other = "other"
+}
+
+enum AnalysisStatus {
+  @@type("pg/text@1")
+
+  pending = "pending"
+  processing = "processing"
+  completed = "completed"
+  failed = "failed"
+}
+
+enum ConditionStatus {
+  @@type("pg/text@1")
+
+  active = "active"
+  resolved = "resolved"
+  chronic = "chronic"
+  under_observation = "under_observation"
+}
+
+enum MedicationStatus {
+  @@type("pg/text@1")
+
+  active = "active"
+  completed = "completed"
+  discontinued = "discontinued"
+}
+
+enum GoalStatus {
+  @@type("pg/text@1")
+
+  active = "active"
+  completed = "completed"
+  paused = "paused"
+  cancelled = "cancelled"
+}
+
+enum ActivityType {
+  @@type("pg/text@1")
+
+  walking = "walking"
+  running = "running"
+  yoga = "yoga"
+  cycling = "cycling"
+  swimming = "swimming"
+  strength_training = "strength_training"
+  meditation = "meditation"
+  breathing = "breathing"
+  other = "other"
+}
+
+enum FamilyLinkStatus {
+  @@type("pg/text@1")
+
+  pending = "pending"
+  active = "active"
+  revoked = "revoked"
+}
+
+enum SharePermission {
+  @@type("pg/text@1")
+
+  view = "view"
+  download = "download"
+}
+
+enum NotificationType {
+  @@type("pg/text@1")
+
+  medication = "medication"
+  goal = "goal"
+  activity = "activity"
+  health_metric = "health_metric"
+  family_share = "family_share"
+  system = "system"
+}
+
+// ============================================================
+// USERS
+// ============================================================
+
+model User {
+  id              Uuid     @id @default(uuid())
+  email           String   @unique
+  passwordHash    String?
+  firstName       String?
+  lastName        String?
+  dateOfBirth     DateTime?
+  phone           String?
+  profileImageUrl String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now())
+
+  medicalRecords  MedicalRecord[]
+  conditions      Condition[]
+  medications     Medication[]
+  healthMetrics   HealthMetric[]
+  goals           Goal[]
+  activities      Activity[]
+  conversations   AiConversation[]
+  notifications   Notification[]
+
+  ownedFamilyLinks   FamilyLink[] @relation("FamilyOwner")
+  memberFamilyLinks  FamilyLink[] @relation("FamilyMember")
+
+  sharedRecords      RecordShare[] @relation("SharedBy")
+  receivedShares     RecordShare[] @relation("SharedWith")
+
+  @@index([email])
+  @@map("users")
+}
+
+
+// ============================================================
+// MEDICAL RECORDS
+// ============================================================
+
+model MedicalRecord {
+  id             Uuid       @id @default(uuid())
+  userId         Uuid
+  title          String
+  recordType     RecordType
+  fileUrl        String
+  fileName       String?
+  mimeType       String?
+  fileSize       Int?
+  recordedAt     DateTime?
+  uploadedAt     DateTime   @default(now())
+  metadata       Json?
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analyses       RecordAnalysis[]
+  shares         RecordShare[]
+
+  @@index([userId])
+  @@index([userId, recordType])
+  @@index([recordedAt])
+  @@map("medical_records")
+}
+
+
+// ============================================================
+// AI ANALYSIS OF MEDICAL RECORDS
+// ============================================================
+
+model RecordAnalysis {
+  id              Uuid           @id @default(uuid())
+  recordId        Uuid
+  status          AnalysisStatus @default(pending)
+  summary         String?
+  extractedData   Json?
+  modelVersion    String?
+  promptVersion   String?
+  errorMessage    String?
+  createdAt       DateTime       @default(now())
+  completedAt     DateTime?
+
+  record          MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@index([recordId])
+  @@index([status])
+  @@map("record_analyses")
+}
+
+
+// ============================================================
+// CONDITIONS / DISEASES
+// ============================================================
+
+model Condition {
+  id            Uuid            @id @default(uuid())
+  userId        Uuid
+  name          String
+  status        ConditionStatus @default(active)
+  diagnosisDate DateTime?
+  notes         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @default(now())
+
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@map("conditions")
+}
+
+
+// ============================================================
+// MEDICATIONS
+// ============================================================
+
+model Medication {
+  id          Uuid             @id @default(uuid())
+  userId      Uuid
+  name        String
+  dosage      String?
+  frequency   String?
+  startDate   DateTime?
+  endDate     DateTime?
+  status      MedicationStatus @default(active)
+  instructions String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @default(now())
+
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@map("medications")
+}
+
+
+// ============================================================
+// HEALTH METRICS
+// ============================================================
+
+model HealthMetric {
+  id          Uuid     @id @default(uuid())
+  userId      Uuid
+  metricType  String
+  value       Float
+  unit        String
+  measuredAt  DateTime
+  source      String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, metricType])
+  @@index([measuredAt])
+  @@map("health_metrics")
+}
+
+
+// ============================================================
+// LIFESTYLE / WELLNESS GOALS
+// ============================================================
+
+model Goal {
+  id           Uuid       @id @default(uuid())
+  userId       Uuid
+  title        String
+  description  String?
+  category     String?
+  targetValue  Float?
+  targetUnit   String?
+  startDate    DateTime
+  endDate      DateTime?
+  status       GoalStatus @default(active)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @default(now())
+
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activities   Activity[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@map("goals")
+}
+
+
+// ============================================================
+// LIFESTYLE ACTIVITIES
+// ============================================================
+
+model Activity {
+  id              Uuid         @id @default(uuid())
+  userId          Uuid
+  goalId          Uuid?
+  activityType    ActivityType
+  durationMinutes Int?
+  distanceKm      Float?
+  caloriesBurned  Float?
+  completedAt     DateTime
+  notes           String?
+  metadata        Json?
+  createdAt       DateTime     @default(now())
+
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goal            Goal? @relation(fields: [goalId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, activityType])
+  @@index([goalId])
+  @@index([completedAt])
+  @@map("activities")
+}
+
+
+// ============================================================
+// AI CONVERSATIONS
+// ============================================================
+
+model AiConversation {
+  id          Uuid     @id @default(uuid())
+  userId      Uuid
+  title       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    AiMessage[]
+
+  @@index([userId])
+  @@map("ai_conversations")
+}
+
+
+// ============================================================
+// AI MESSAGES
+// ============================================================
+
+model AiMessage {
+  id             Uuid     @id @default(uuid())
+  conversationId Uuid
+  role           String
+  content        String
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("ai_messages")
+}
+
+
+// ============================================================
+// FAMILY ACCESS
+// ============================================================
+
+model FamilyLink {
+  id          Uuid             @id @default(uuid())
+  ownerUserId Uuid
+  memberUserId Uuid?
+  memberEmail String?
+  status      FamilyLinkStatus @default(pending)
+  createdAt   DateTime         @default(now())
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+
+  owner       User  @relation("FamilyOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  member      User? @relation("FamilyMember", fields: [memberUserId], references: [id], onDelete: SetNull)
+
+  @@index([ownerUserId])
+  @@index([memberUserId])
+  @@index([memberEmail])
+  @@index([status])
+  @@map("family_links")
+}
+
+
+// ============================================================
+// MEDICAL RECORD SHARING
+// ============================================================
+
+model RecordShare {
+  id            Uuid            @id @default(uuid())
+  recordId      Uuid
+  sharedByUserId Uuid
+  sharedWithUserId Uuid
+  permission    SharePermission @default(view)
+  createdAt     DateTime        @default(now())
+  expiresAt     DateTime?
+  revokedAt    DateTime?
+
+  record        MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  sharedBy      User          @relation("SharedBy", fields: [sharedByUserId], references: [id], onDelete: Cascade)
+  sharedWith    User          @relation("SharedWith", fields: [sharedWithUserId], references: [id], onDelete: Cascade)
+
+  @@index([recordId])
+  @@index([sharedByUserId])
+  @@index([sharedWithUserId])
+  @@index([expiresAt])
+  @@map("record_shares")
+}
+
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id        Uuid             @id @default(uuid())
+  userId    Uuid
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  readAt    DateTime?
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
