@@ -1,5 +1,6 @@
+import { Temporal } from "@js-temporal/polyfill";
 import { createClient } from "@supabase/supabase-js";
-import db from "./prisma";
+import db, { ensureDbConnected } from "./prisma";
 import { processDocument } from "./document-ai";
 import { extractMedicalData } from "./medical-analysis";
 import { validateMedicalData } from "./medical-validation";
@@ -10,6 +11,10 @@ export async function analyzeMedicalRecord(
   recordId: string,
   userId: string
 ) {
+  // Make sure the Prisma/Postgres runtime is connected
+  // before executing any database operation.
+  await ensureDbConnected();
+
   // 1. Verify ownership of the medical record.
   const record = await db.orm.public.MedicalRecord
     .where({
@@ -29,20 +34,20 @@ export async function analyzeMedicalRecord(
   });
 
   try {
-    // 3. Mark the analysis as processing.
+    // 3. Mark analysis as processing.
     await db.orm.public.RecordAnalysis
       .where({ id: analysis.id })
       .update({
         status: "processing",
       });
 
-    // 4. Create a privileged server-side Supabase client.
+    // 4. Create a Supabase server client using the secret key.
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SECRET_KEY!
     );
 
-    // 5. Download the private medical file.
+    // 5. Download the medical record from private storage.
     const { data: fileData, error: downloadError } =
       await supabase.storage
         .from(BUCKET_NAME)
@@ -56,10 +61,12 @@ export async function analyzeMedicalRecord(
       );
     }
 
-    // 6. Convert the file to a Buffer.
-    const fileBuffer = Buffer.from(await fileData.arrayBuffer());
+    // 6. Convert the downloaded file to a Buffer.
+    const fileBuffer = Buffer.from(
+      await fileData.arrayBuffer()
+    );
 
-    // 7. Run Google Document AI OCR.
+    // 7. Send the document to Google Document AI.
     const ocrText = await processDocument(
       fileBuffer,
       record.mimeType ?? "application/pdf"
@@ -69,10 +76,10 @@ export async function analyzeMedicalRecord(
       throw new Error("Document AI returned no text.");
     }
 
-    // 8. Extract structured medical data.
+    // 8. Extract structured medical data from OCR text.
     const extractedData = extractMedicalData(ocrText);
 
-    // 9. Validate the extracted data.
+    // 9. Validate the extracted medical data.
     const validatedData = validateMedicalData(extractedData);
 
     // 10. Save the completed analysis.
@@ -82,21 +89,23 @@ export async function analyzeMedicalRecord(
         status: "completed",
         extractedData: validatedData,
         modelVersion: "document-ai-ocr-v1",
-        completedAt: new Date(),
+        completedAt: Temporal.Now.instant(),
       });
 
+    // 11. Return the result.
     return {
       analysisId: analysis.id,
       status: "completed",
       extractedData: validatedData,
     };
   } catch (error) {
+    // 12. Convert the error into a safe message.
     const message =
       error instanceof Error
         ? error.message
         : "Unknown medical analysis error.";
 
-    // 11. Save the failure state.
+    // 13. Mark the analysis as failed.
     await db.orm.public.RecordAnalysis
       .where({ id: analysis.id })
       .update({
@@ -104,6 +113,7 @@ export async function analyzeMedicalRecord(
         errorMessage: message,
       });
 
+    // 14. Re-throw so the caller knows the pipeline failed.
     throw error;
   }
 }
