@@ -66,3 +66,13 @@ credentials/
 .claude/
 .cursor/
 .devin/
+
+# Local docs, agent instructions, tooling output
+/docs/
+/AGENTS.md
+/CLAUDE.md
+/prisma-next.md
+/graphify-out/
+/public/file.svg
+/public/globe.svg
+/public/window.svg

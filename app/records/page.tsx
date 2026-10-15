@@ -12,6 +12,30 @@ type RecordItem = {
   fileUrl: string;
 };
 
+type LabResult = {
+  name: string;
+  value: number;
+  unit: string | null;
+  confidence: string;
+  validation: {
+    status: string;
+    errors: string[];
+    warnings: string[];
+  };
+};
+
+type AnalysisResult = {
+  analysisId: string;
+  status: string;
+  extractedData: {
+    status: string;
+    labResults: LabResult[];
+    errors: string[];
+  };
+};
+
+type AnalysisState = AnalysisResult | { error: string };
+
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 const ALLOWED_TYPES = [
@@ -28,6 +52,8 @@ export default function RecordsPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [analyses, setAnalyses] = useState<Record<string, AnalysisState>>({});
 
   async function getCurrentUser() {
     const {
@@ -257,6 +283,88 @@ export default function RecordsPage() {
     setDeletingId(null);
   }
 
+  async function handleAnalyze(record: RecordItem) {
+    setAnalyzingId(record.id);
+
+    let result: AnalysisState;
+
+    try {
+      const response = await fetch(
+        `/api/medical-records/${record.id}/analyze`,
+        { method: "POST" }
+      );
+
+      if (response.status === 401) {
+        router.push("/login");
+        setAnalyzingId(null);
+        return;
+      }
+
+      const body = await response.json();
+
+      result = response.ok
+        ? body
+        : { error: body.error ?? "Analysis failed. Please try again." };
+    } catch {
+      result = { error: "Analysis failed. Please try again." };
+    }
+
+    setAnalyses((current) => ({ ...current, [record.id]: result }));
+    setAnalyzingId(null);
+  }
+
+  function renderAnalysis(analysis: AnalysisState) {
+    if ("error" in analysis) {
+      return <p role="alert">Analysis error: {analysis.error}</p>;
+    }
+
+    const { labResults } = analysis.extractedData;
+
+    return (
+      <div>
+        <h4>Analysis Results</h4>
+
+        <p>
+          These results were extracted automatically from your document and
+          may be wrong. They are not a diagnosis. The extraction check only
+          tests whether a value looks plausibly read; it is not a clinical
+          reference range. Discuss results with a qualified clinician.
+        </p>
+
+        {labResults.length > 0 ? (
+          <ul>
+            {labResults.map((result) => {
+              const notes = [
+                ...result.validation.errors,
+                ...result.validation.warnings,
+              ];
+
+              return (
+                <li key={result.name}>
+                  <strong>{result.name}:</strong> {result.value}{" "}
+                  {result.unit ?? "(unit not found)"}
+                  {" — "}
+                  Extraction confidence: {result.confidence}
+                  {" — "}
+                  Extraction check: {result.validation.status}
+                  {notes.length > 0 && (
+                    <ul>
+                      {notes.map((note) => (
+                        <li key={note}>{note}</li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p>No supported lab results were found.</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <main>
       <h1>Medical Records</h1>
@@ -311,10 +419,22 @@ export default function RecordsPage() {
             <button
               type="button"
               onClick={() => handleDelete(record)}
-              disabled={deletingId === record.id}
+              disabled={deletingId === record.id || analyzingId === record.id}
             >
               {deletingId === record.id ? "Deleting..." : "Delete Record"}
             </button>
+
+            {" "}
+
+            <button
+              type="button"
+              onClick={() => handleAnalyze(record)}
+              disabled={analyzingId !== null || deletingId === record.id}
+            >
+              {analyzingId === record.id ? "Analyzing..." : "Analyze"}
+            </button>
+
+            {analyses[record.id] && renderAnalysis(analyses[record.id])}
 
             <hr />
           </div>

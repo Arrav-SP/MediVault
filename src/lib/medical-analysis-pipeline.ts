@@ -7,6 +7,8 @@ import { validateMedicalData } from "./medical-validation";
 
 const BUCKET_NAME = "medical-records";
 
+export class RecordNotFoundError extends Error {}
+
 export async function analyzeMedicalRecord(
   recordId: string,
   userId: string
@@ -24,7 +26,7 @@ export async function analyzeMedicalRecord(
     .first();
 
   if (!record) {
-    throw new Error("Medical record not found.");
+    throw new RecordNotFoundError("Medical record not found.");
   }
 
   // 2. Create an analysis record.
