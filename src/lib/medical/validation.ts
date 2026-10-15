@@ -1,33 +1,54 @@
-const VALIDATION_RULES = {
+import type { ExtractionResult, LabResult } from "./extraction";
+
+// "VALID" only means the value passed extraction/plausibility checks.
+// It is NOT a clinical reference range or a statement that a result is normal.
+export type ValidationStatus = "VALID" | "REVIEW" | "REJECT";
+
+export type ValidatedLabResult = LabResult & {
+  validation: {
+    status: ValidationStatus;
+    errors: string[];
+    warnings: string[];
+  };
+};
+
+export type ValidationResult = {
+  status: ValidationStatus;
+  labResults: ValidatedLabResult[];
+  errors: string[];
+};
+
+type ValidationRule = {
+  units: string[];
+  plausibleRange: [number, number];
+};
+
+const VALIDATION_RULES: Record<string, ValidationRule> = {
   HbA1c: {
     units: ["%"],
     plausibleRange: [2, 20],
   },
-
   "Glucose (Fasting)": {
     units: ["mg/dL", "mmol/L"],
     plausibleRange: [20, 1000],
   },
-
   Hemoglobin: {
     units: ["g/dL", "g/L"],
     plausibleRange: [3, 25],
   },
-
   "LDL Cholesterol": {
     units: ["mg/dL", "mmol/L"],
     plausibleRange: [10, 1000],
   },
-
   Creatinine: {
     units: ["mg/dL", "µmol/L", "umol/L"],
     plausibleRange: [0.1, 20],
   },
 };
 
-function validateLabResult(result) {
-  const errors = [];
-  const warnings = [];
+export function validateLabResult(result: LabResult): ValidatedLabResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
 
   if (!result.name) {
     errors.push("Test name is missing.");
@@ -41,7 +62,9 @@ function validateLabResult(result) {
     errors.push("Test value is not a valid number.");
   }
 
-  const rule = VALIDATION_RULES[result.name];
+  const rule = Object.hasOwn(VALIDATION_RULES, result.name)
+    ? VALIDATION_RULES[result.name]
+    : undefined;
 
   if (!rule) {
     warnings.push("No validation rule exists for this test.");
@@ -52,15 +75,11 @@ function validateLabResult(result) {
       errors.push(`Unexpected unit: ${result.unit}.`);
     }
 
-    if (
-      Number.isFinite(result.value) &&
-      (
-        result.value < rule.plausibleRange[0] ||
-        result.value > rule.plausibleRange[1]
-      )
-    ) {
+    const [min, max] = rule.plausibleRange;
+
+    if (Number.isFinite(result.value) && (result.value < min || result.value > max)) {
       warnings.push(
-        `Value is outside the configured plausible range (${rule.plausibleRange[0]}-${rule.plausibleRange[1]}).`
+        `Value is outside the configured plausible range (${min}-${max}).`
       );
     }
   }
@@ -73,7 +92,7 @@ function validateLabResult(result) {
     warnings.push("Extraction confidence is low; review required.");
   }
 
-  let status = "VALID";
+  let status: ValidationStatus = "VALID";
 
   if (errors.length > 0) {
     status = "REJECT";
@@ -91,7 +110,9 @@ function validateLabResult(result) {
   };
 }
 
-function validateMedicalData(extractedData) {
+export function validateMedicalData(
+  extractedData: Partial<ExtractionResult> | null | undefined
+): ValidationResult {
   if (!extractedData || !Array.isArray(extractedData.labResults)) {
     return {
       status: "REJECT",
@@ -102,19 +123,11 @@ function validateMedicalData(extractedData) {
 
   const labResults = extractedData.labResults.map(validateLabResult);
 
-  const hasRejected = labResults.some(
-    (result) => result.validation.status === "REJECT"
-  );
+  let status: ValidationStatus = "VALID";
 
-  const hasReview = labResults.some(
-    (result) => result.validation.status === "REVIEW"
-  );
-
-  let status = "VALID";
-
-  if (hasRejected) {
+  if (labResults.some((result) => result.validation.status === "REJECT")) {
     status = "REJECT";
-  } else if (hasReview) {
+  } else if (labResults.some((result) => result.validation.status === "REVIEW")) {
     status = "REVIEW";
   }
 
@@ -124,8 +137,3 @@ function validateMedicalData(extractedData) {
     errors: [],
   };
 }
-
-module.exports = {
-  validateLabResult,
-  validateMedicalData,
-};

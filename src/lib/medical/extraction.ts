@@ -1,4 +1,24 @@
-const TEST_DEFINITIONS = [
+export type Confidence = "high" | "medium" | "low";
+
+export type LabResult = {
+  name: string;
+  value: number;
+  unit: string | null;
+  confidence: Confidence;
+};
+
+export type ExtractionResult = {
+  labResults: LabResult[];
+  warnings: string[];
+};
+
+type TestDefinition = {
+  name: string;
+  aliases: string[];
+  units: string[];
+};
+
+const TEST_DEFINITIONS: TestDefinition[] = [
   {
     name: "HbA1c",
     aliases: ["hba1c"],
@@ -26,93 +46,53 @@ const TEST_DEFINITIONS = [
   },
 ];
 
-function normalizeText(text) {
+const UNIT_ALIASES: Record<string, string> = {
+  "%": "%",
+  "mg/dl": "mg/dL",
+  "g/dl": "g/dL",
+  "g/l": "g/L",
+  "mmol/l": "mmol/L",
+  "µmol/l": "µmol/L",
+  "umol/l": "umol/L",
+};
+
+function normalizeText(text: string) {
   return text
     .replace(/\r/g, "")
     .replace(/[ \t]+/g, " ")
     .trim();
 }
 
-function normalizeName(text) {
+function normalizeName(text: string) {
   return normalizeText(text)
     .toLowerCase()
     .replace(/\s+/g, " ");
 }
 
-function findTestDefinition(name) {
+function findTestDefinition(name: string) {
   const normalizedName = normalizeName(name);
 
   return TEST_DEFINITIONS.find((test) =>
-    test.aliases.some(
-      (alias) => normalizeName(alias) === normalizedName
-    )
+    test.aliases.some((alias) => normalizeName(alias) === normalizedName)
   );
 }
 
-function findTestInLine(line) {
-  const normalizedLine = normalizeText(line);
-  const lowerLine = normalizedLine.toLowerCase();
-
-  // Longest aliases first prevents "ldl" matching "ldl cholesterol".
-  const aliases = TEST_DEFINITIONS
-    .flatMap((test) =>
-      test.aliases.map((alias) => ({
-        test,
-        alias,
-      }))
-    )
-    .sort((a, b) => b.alias.length - a.alias.length);
-
-  for (const { test, alias } of aliases) {
-    const aliasLower = alias.toLowerCase();
-
-    if (!lowerLine.startsWith(aliasLower)) {
-      continue;
-    }
-
-    const remainder = normalizedLine
-      .slice(alias.length)
-      .replace(/^[\s:\-]+/, "")
-      .trim();
-
-    const valueMatch = remainder.match(
-      /^(-?\d+(?:\.\d+)?)\s*(.*)$/i
-    );
-
-    if (!valueMatch) {
-      continue;
-    }
-
-    const value = Number(valueMatch[1]);
-
-    if (!Number.isFinite(value)) {
-      continue;
-    }
-
-    const unit = normalizeUnit(valueMatch[2]);
-
-    const validUnit =
-      unit === null || test.units.includes(unit);
-
-    return {
-      name: test.name,
-      value,
-      unit,
-      confidence: validUnit ? "high" : "medium",
-    };
+function normalizeUnit(unit: string | undefined) {
+  if (!unit) {
+    return null;
   }
 
-  return null;
+  const normalized = unit.trim().replace(/[.,;]+$/, "");
+
+  return UNIT_ALIASES[normalized.toLowerCase()] || normalized;
 }
 
-function parseValue(value) {
+function parseValue(value: string | undefined) {
   if (value === undefined || value === null) {
     return null;
   }
 
-  const normalized = String(value)
-    .replace(/,/g, "")
-    .trim();
+  const normalized = String(value).replace(/,/g, "").trim();
 
   const match = normalized.match(/-?\d+(?:\.\d+)?/);
 
@@ -125,30 +105,53 @@ function parseValue(value) {
   return Number.isFinite(number) ? number : null;
 }
 
-function normalizeUnit(unit) {
-  if (!unit) {
-    return null;
+// Longest aliases first prevents "ldl" matching "ldl cholesterol".
+const ALIASES_LONGEST_FIRST = TEST_DEFINITIONS.flatMap((test) =>
+  test.aliases.map((alias) => ({ test, alias }))
+).sort((a, b) => b.alias.length - a.alias.length);
+
+function findTestInLine(line: string): LabResult | null {
+  const normalizedLine = normalizeText(line);
+  const lowerLine = normalizedLine.toLowerCase();
+
+  for (const { test, alias } of ALIASES_LONGEST_FIRST) {
+    if (!lowerLine.startsWith(alias.toLowerCase())) {
+      continue;
+    }
+
+    const remainder = normalizedLine
+      .slice(alias.length)
+      .replace(/^[\s:\-]+/, "")
+      .trim();
+
+    const valueMatch = remainder.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/i);
+
+    if (!valueMatch) {
+      continue;
+    }
+
+    const value = Number(valueMatch[1]);
+
+    if (!Number.isFinite(value)) {
+      continue;
+    }
+
+    const unit = normalizeUnit(valueMatch[2]);
+    const validUnit = unit === null || test.units.includes(unit);
+
+    return {
+      name: test.name,
+      value,
+      unit,
+      confidence: validUnit ? "high" : "medium",
+    };
   }
 
-  const normalized = unit
-    .trim()
-    .replace(/[.,;]+$/, "");
-
-  const aliases = {
-    "%": "%",
-    "mg/dl": "mg/dL",
-    "g/dl": "g/dL",
-    "g/l": "g/L",
-    "mmol/l": "mmol/L",
-    "µmol/l": "µmol/L",
-    "umol/l": "umol/L",
-  };
-
-  return aliases[normalized.toLowerCase()] || normalized;
+  return null;
 }
 
-function extractFromSequentialLines(lines) {
-  const results = [];
+function extractFromSequentialLines(lines: string[]) {
+  const results: LabResult[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const testDefinition = findTestDefinition(lines[i]);
@@ -164,9 +167,7 @@ function extractFromSequentialLines(lines) {
     }
 
     const unit = normalizeUnit(lines[i + 2]);
-
-    const validUnit =
-      unit === null || testDefinition.units.includes(unit);
+    const validUnit = unit === null || testDefinition.units.includes(unit);
 
     results.push({
       name: testDefinition.name,
@@ -179,8 +180,8 @@ function extractFromSequentialLines(lines) {
   return results;
 }
 
-function removeDuplicates(results) {
-  const seen = new Set();
+function removeDuplicates(results: LabResult[]) {
+  const seen = new Set<string>();
 
   return results.filter((result) => {
     const key = `${result.name}|${result.value}|${result.unit}`;
@@ -194,7 +195,7 @@ function removeDuplicates(results) {
   });
 }
 
-function extractMedicalData(ocrText) {
+export function extractMedicalData(ocrText: unknown): ExtractionResult {
   if (!ocrText || typeof ocrText !== "string") {
     return {
       labResults: [],
@@ -202,16 +203,11 @@ function extractMedicalData(ocrText) {
     };
   }
 
-  const lines = ocrText
-    .split("\n")
-    .map(normalizeText)
-    .filter(Boolean);
+  const lines = ocrText.split("\n").map(normalizeText).filter(Boolean);
 
-  const results = [];
+  const results: LabResult[] = [];
 
-  // Strategy 1: inline formats
-  // HbA1c: 6.1 %
-  // Glucose (Fasting) 108 mg/dL
+  // Strategy 1: inline formats, e.g. "HbA1c: 6.1 %" or "Glucose (Fasting) 108 mg/dL".
   for (const line of lines) {
     const result = findTestInLine(line);
 
@@ -220,15 +216,12 @@ function extractMedicalData(ocrText) {
     }
   }
 
-  // Strategy 2: sequential OCR table output
-  // HbA1c
-  // 6.1
-  // %
+  // Strategy 2: sequential OCR table output (name, value and unit on separate lines).
   results.push(...extractFromSequentialLines(lines));
 
   const labResults = removeDuplicates(results);
 
-  const warnings = [];
+  const warnings: string[] = [];
 
   for (const result of labResults) {
     if (!result.unit) {
@@ -245,7 +238,3 @@ function extractMedicalData(ocrText) {
     warnings,
   };
 }
-
-module.exports = {
-  extractMedicalData,
-};

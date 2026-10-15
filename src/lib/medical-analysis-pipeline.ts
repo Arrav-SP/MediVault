@@ -1,11 +1,19 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { createClient } from "@supabase/supabase-js";
 import db, { ensureDbConnected } from "./prisma";
-import { processDocument } from "./document-ai";
-import { extractMedicalData } from "./medical-analysis";
-import { validateMedicalData } from "./medical-validation";
+import { getDocumentText, type DocumentTextSource } from "./document-text";
+import { extractMedicalData } from "./medical/extraction";
+import { validateMedicalData } from "./medical/validation";
+
+export { UnsupportedDocumentError } from "./document-text";
 
 const BUCKET_NAME = "medical-records";
+
+// Stored in RecordAnalysis.modelVersion so each result records how its text was read.
+const MODEL_VERSIONS: Record<DocumentTextSource, string> = {
+  "pdf-text": "pdf-text-v1",
+  "google-ocr": "document-ai-ocr-v1",
+};
 
 export class RecordNotFoundError extends Error {}
 
@@ -68,14 +76,14 @@ export async function analyzeMedicalRecord(
       await fileData.arrayBuffer()
     );
 
-    // 7. Send the document to Google Document AI.
-    const ocrText = await processDocument(
+    // 7. Read the document's text (built-in PDF text, or OCR for scans/photos).
+    const { text: ocrText, source } = await getDocumentText(
       fileBuffer,
       record.mimeType ?? "application/pdf"
     );
 
     if (!ocrText.trim()) {
-      throw new Error("Document AI returned no text.");
+      throw new Error("No text could be read from the document.");
     }
 
     // 8. Extract structured medical data from OCR text.
@@ -90,7 +98,7 @@ export async function analyzeMedicalRecord(
       .update({
         status: "completed",
         extractedData: validatedData,
-        modelVersion: "document-ai-ocr-v1",
+        modelVersion: MODEL_VERSIONS[source],
         completedAt: Temporal.Now.instant(),
       });
 

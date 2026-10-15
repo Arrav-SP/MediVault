@@ -3,6 +3,11 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
+import {
+  dateInputToUtcIso,
+  formatDateOnly,
+  utcIsoToDateInput,
+} from "@/src/lib/dates";
 
 type Medication = {
   id: string;
@@ -105,10 +110,8 @@ export default function MedicationsPage() {
       dosage: medication.dosage ?? "",
       frequency: medication.frequency ?? "",
       instructions: medication.instructions ?? "",
-      startDate: medication.startDate
-        ? medication.startDate.slice(0, 10)
-        : "",
-      endDate: medication.endDate ? medication.endDate.slice(0, 10) : "",
+      startDate: utcIsoToDateInput(medication.startDate),
+      endDate: utcIsoToDateInput(medication.endDate),
       status: medication.status,
     });
 
@@ -143,12 +146,8 @@ export default function MedicationsPage() {
       dosage: form.dosage.trim() || null,
       frequency: form.frequency.trim() || null,
       instructions: form.instructions.trim() || null,
-      startDate: form.startDate
-        ? new Date(`${form.startDate}T00:00:00`).toISOString()
-        : null,
-      endDate: form.endDate
-        ? new Date(`${form.endDate}T00:00:00`).toISOString()
-        : null,
+      startDate: dateInputToUtcIso(form.startDate),
+      endDate: dateInputToUtcIso(form.endDate),
       status: form.status,
     };
 
@@ -396,14 +395,14 @@ export default function MedicationsPage() {
             {medication.startDate && (
               <p>
                 <strong>Start Date:</strong>{" "}
-                {new Date(medication.startDate).toLocaleDateString()}
+                {formatDateOnly(medication.startDate)}
               </p>
             )}
 
             {medication.endDate && (
               <p>
                 <strong>End Date:</strong>{" "}
-                {new Date(medication.endDate).toLocaleDateString()}
+                {formatDateOnly(medication.endDate)}
               </p>
             )}
 

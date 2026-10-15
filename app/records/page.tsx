@@ -3,6 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
+import type { ValidationResult } from "@/src/lib/medical/validation";
 
 type RecordItem = {
   id: string;
@@ -12,26 +13,10 @@ type RecordItem = {
   fileUrl: string;
 };
 
-type LabResult = {
-  name: string;
-  value: number;
-  unit: string | null;
-  confidence: string;
-  validation: {
-    status: string;
-    errors: string[];
-    warnings: string[];
-  };
-};
-
 type AnalysisResult = {
   analysisId: string;
   status: string;
-  extractedData: {
-    status: string;
-    labResults: LabResult[];
-    errors: string[];
-  };
+  extractedData: ValidationResult;
 };
 
 type AnalysisState = AnalysisResult | { error: string };

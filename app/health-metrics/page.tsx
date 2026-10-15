@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
+import { toLocalDateInput, toLocalTimeInput } from "@/src/lib/dates";
 
 type HealthMetric = {
   id: string;
@@ -26,8 +27,8 @@ const emptyForm: MetricForm = {
   metricType: "weight",
   value: "",
   unit: "kg",
-  measuredDate: new Date().toISOString().slice(0, 10),
-  measuredTime: new Date().toTimeString().slice(0, 5),
+  measuredDate: toLocalDateInput(),
+  measuredTime: toLocalTimeInput(),
   source: "",
 };
 
@@ -144,8 +145,8 @@ export default function HealthMetricsPage() {
   function resetForm() {
     setForm({
       ...emptyForm,
-      measuredDate: new Date().toISOString().slice(0, 10),
-      measuredTime: new Date().toTimeString().slice(0, 5),
+      measuredDate: toLocalDateInput(),
+      measuredTime: toLocalTimeInput(),
     });
     setEditingId(null);
   }
@@ -159,8 +160,8 @@ export default function HealthMetricsPage() {
       metricType: metric.metricType,
       value: String(metric.value),
       unit: metric.unit,
-      measuredDate: measuredDate.toISOString().slice(0, 10),
-      measuredTime: measuredDate.toTimeString().slice(0, 5),
+      measuredDate: toLocalDateInput(measuredDate),
+      measuredTime: toLocalTimeInput(measuredDate),
       source: metric.source ?? "",
     });
 

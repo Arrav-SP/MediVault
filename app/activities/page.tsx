@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
+import { toLocalDateInput, toLocalTimeInput } from "@/src/lib/dates";
 
 type Activity = {
   id: string;
@@ -38,8 +39,8 @@ const emptyForm: ActivityForm = {
   distanceKm: "",
   durationMinutes: "",
   goalId: "",
-  completedDate: new Date().toISOString().slice(0, 10),
-  completedTime: new Date().toTimeString().slice(0, 5),
+  completedDate: toLocalDateInput(),
+  completedTime: toLocalTimeInput(),
   notes: "",
 };
 
@@ -138,8 +139,8 @@ export default function ActivitiesPage() {
   function resetForm() {
     setForm({
       ...emptyForm,
-      completedDate: new Date().toISOString().slice(0, 10),
-      completedTime: new Date().toTimeString().slice(0, 5),
+      completedDate: toLocalDateInput(),
+      completedTime: toLocalTimeInput(),
     });
 
     setEditingId(null);
@@ -163,8 +164,8 @@ export default function ActivitiesPage() {
           ? String(activity.durationMinutes)
           : "",
       goalId: activity.goalId ?? "",
-      completedDate: completedAt.toISOString().slice(0, 10),
-      completedTime: completedAt.toTimeString().slice(0, 5),
+      completedDate: toLocalDateInput(completedAt),
+      completedTime: toLocalTimeInput(completedAt),
       notes: activity.notes ?? "",
     });
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/src/lib/supabase-server";
+import { formatDateOnly } from "@/src/lib/dates";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -191,13 +192,13 @@ export default async function DashboardPage() {
 
             <p>
               <strong>Started:</strong>{" "}
-              {new Date(goal.startDate).toLocaleDateString()}
+              {formatDateOnly(goal.startDate)}
             </p>
 
             {goal.endDate && (
               <p>
                 <strong>Ends:</strong>{" "}
-                {new Date(goal.endDate).toLocaleDateString()}
+                {formatDateOnly(goal.endDate)}
               </p>
             )}
 

@@ -3,6 +3,11 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
+import {
+  dateInputToUtcIso,
+  formatDateOnly,
+  utcIsoToDateInput,
+} from "@/src/lib/dates";
 
 type Condition = {
   id: string;
@@ -98,43 +103,12 @@ export default function ConditionsPage() {
 
     setForm({
       name: condition.name,
-      diagnosisDate: condition.diagnosisDate
-        ? condition.diagnosisDate.slice(0, 10)
-        : "",
+      diagnosisDate: utcIsoToDateInput(condition.diagnosisDate),
       notes: condition.notes ?? "",
       status: condition.status,
     });
 
     setMessage("");
-  }
-
-  function convertDateToISO(value: string) {
-    if (!value) {
-      return null;
-    }
-
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      return `${value}T00:00:00.000Z`;
-    }
-
-    const parts = value.split("/");
-
-    if (parts.length === 3) {
-      const [month, day, year] = parts;
-
-      if (
-        /^\d{1,2}$/.test(month) &&
-        /^\d{1,2}$/.test(day) &&
-        /^\d{4}$/.test(year)
-      ) {
-        return `${year}-${month.padStart(2, "0")}-${day.padStart(
-          2,
-          "0"
-        )}T00:00:00.000Z`;
-      }
-    }
-
-    return null;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -150,7 +124,7 @@ export default function ConditionsPage() {
       return;
     }
 
-    const diagnosisDate = convertDateToISO(form.diagnosisDate);
+    const diagnosisDate = dateInputToUtcIso(form.diagnosisDate);
 
     if (form.diagnosisDate && !diagnosisDate) {
       setMessage("Please enter a valid diagnosis date.");
@@ -360,7 +334,7 @@ export default function ConditionsPage() {
             {condition.diagnosisDate && (
               <p>
                 <strong>Diagnosis Date:</strong>{" "}
-                {new Date(condition.diagnosisDate).toLocaleDateString()}
+                {formatDateOnly(condition.diagnosisDate)}
               </p>
             )}
 

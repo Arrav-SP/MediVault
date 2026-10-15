@@ -3,6 +3,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
+import {
+  dateInputToUtcIso,
+  formatDateOnly,
+  toLocalDateInput,
+  utcIsoToDateInput,
+} from "@/src/lib/dates";
 
 type Goal = {
   id: string;
@@ -31,7 +37,7 @@ const emptyForm: GoalForm = {
   title: "",
   description: "",
   category: "",
-  startDate: new Date().toISOString().slice(0, 10),
+  startDate: toLocalDateInput(),
   endDate: "",
   targetValue: "",
   targetUnit: "",
@@ -105,7 +111,7 @@ export default function GoalsPage() {
   function resetForm() {
     setForm({
       ...emptyForm,
-      startDate: new Date().toISOString().slice(0, 10),
+      startDate: toLocalDateInput(),
     });
     setEditingId(null);
   }
@@ -117,12 +123,8 @@ export default function GoalsPage() {
       title: goal.title,
       description: goal.description ?? "",
       category: goal.category ?? "",
-      startDate: goal.startDate
-        ? new Date(goal.startDate).toISOString().slice(0, 10)
-        : "",
-      endDate: goal.endDate
-        ? new Date(goal.endDate).toISOString().slice(0, 10)
-        : "",
+      startDate: utcIsoToDateInput(goal.startDate),
+      endDate: utcIsoToDateInput(goal.endDate),
       targetValue:
         goal.targetValue !== null ? String(goal.targetValue) : "",
       targetUnit: goal.targetUnit ?? "",
@@ -130,18 +132,6 @@ export default function GoalsPage() {
     });
 
     setMessage("");
-  }
-
-  function convertDateToISO(value: string) {
-    if (!value) {
-      return null;
-    }
-
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      return `${value}T00:00:00.000Z`;
-    }
-
-    return null;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -162,14 +152,14 @@ export default function GoalsPage() {
       return;
     }
 
-    const startDate = convertDateToISO(form.startDate);
+    const startDate = dateInputToUtcIso(form.startDate);
 
     if (!startDate) {
       setMessage("Please enter a valid start date.");
       return;
     }
 
-    const endDate = convertDateToISO(form.endDate);
+    const endDate = dateInputToUtcIso(form.endDate);
 
     if (form.endDate && !endDate) {
       setMessage("Please enter a valid end date.");
@@ -486,13 +476,13 @@ export default function GoalsPage() {
 
             <p>
               <strong>Start Date:</strong>{" "}
-              {new Date(goal.startDate).toLocaleDateString()}
+              {formatDateOnly(goal.startDate)}
             </p>
 
             {goal.endDate && (
               <p>
                 <strong>End Date:</strong>{" "}
-                {new Date(goal.endDate).toLocaleDateString()}
+                {formatDateOnly(goal.endDate)}
               </p>
             )}
 

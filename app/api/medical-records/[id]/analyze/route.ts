@@ -3,6 +3,7 @@ import { createClient } from "@/src/lib/supabase-server";
 import {
   analyzeMedicalRecord,
   RecordNotFoundError,
+  UnsupportedDocumentError,
 } from "@/src/lib/medical-analysis-pipeline";
 
 const UUID_PATTERN =
@@ -38,6 +39,16 @@ export async function POST(
       return NextResponse.json(
         { error: "Medical record not found." },
         { status: 404 }
+      );
+    }
+
+    if (error instanceof UnsupportedDocumentError) {
+      return NextResponse.json(
+        {
+          error:
+            "This looks like a scanned document or photo. Reading scans automatically isn't available yet.",
+        },
+        { status: 422 }
       );
     }
 

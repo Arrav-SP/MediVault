@@ -1,16 +1,36 @@
 import { DocumentProcessorServiceClient } from "@google-cloud/documentai";
 
-const client = new DocumentProcessorServiceClient({
-  apiEndpoint: "asia-south1-documentai.googleapis.com",
-});
+let client: DocumentProcessorServiceClient | null = null;
 
-const processorName =
-  "projects/medivault-507415/locations/asia-south1/processors/3f00a55808e515f8";
+function requireEnv(name: string) {
+  const value = process.env[name];
+
+  if (!value) {
+    throw new Error(`${name} is not set. See .env.example.`);
+  }
+
+  return value;
+}
+
+function getConfig() {
+  const location = requireEnv("DOCUMENT_AI_LOCATION");
+
+  return {
+    location,
+    processorName: `projects/${requireEnv("DOCUMENT_AI_PROJECT_ID")}/locations/${location}/processors/${requireEnv("DOCUMENT_AI_PROCESSOR_ID")}`,
+  };
+}
 
 export async function processDocument(
   fileContent: Buffer,
   mimeType: string
 ) {
+  const { location, processorName } = getConfig();
+
+  client ??= new DocumentProcessorServiceClient({
+    apiEndpoint: `${location}-documentai.googleapis.com`,
+  });
+
   const [result] = await client.processDocument({
     name: processorName,
     rawDocument: {

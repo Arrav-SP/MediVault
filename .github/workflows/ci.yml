@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Public placeholders so `next build` can prerender; CI never talks to real services.
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Date handling must hold in timezones ahead of, at, and behind UTC.
+      - name: Test (Asia/Kolkata)
+        run: npm test
+        env:
+          TZ: Asia/Kolkata
+      - name: Test (UTC)
+        run: npm test
+        env:
+          TZ: UTC
+      - name: Test (America/New_York)
+        run: npm test
+        env:
+          TZ: America/New_York
+
+      - name: Build
+        run: npm run build
